@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kasir Toko ATK</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f8;color:#222}
+header{background:#1769aa;color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:22px}.wrap{max-width:1200px;margin:auto;padding:16px}
+.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 10px #00000010}
+input,select,button{font:inherit;padding:10px;border:1px solid #ccd3da;border-radius:8px}input,select{width:100%}
+button{cursor:pointer;background:#1769aa;color:white;border:0;font-weight:600}.danger{background:#d32f2f}.secondary{background:#607d8b}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.search{margin-bottom:12px}
+.products{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-height:520px;overflow:auto}
+.product{border:1px solid #e1e5e8;border-radius:10px;padding:12px;cursor:pointer}.product:hover{background:#eef7ff}
+.product b{display:block;margin-bottom:5px}.muted{color:#69757d;font-size:13px}.price{color:#1769aa;font-weight:bold}
+.cart-item{display:grid;grid-template-columns:1fr 70px 90px 30px;gap:7px;align-items:center;padding:9px 0;border-bottom:1px solid #eee}
+.cart-item input{padding:7px}.total{font-size:21px;font-weight:bold;margin:14px 0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}.stat{background:#fff;border-radius:10px;padding:14px}.stat b{font-size:20px;display:block;margin-top:5px}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #eee;text-align:left;font-size:14px}
+.modal{position:fixed;inset:0;background:#0007;display:none;align-items:center;justify-content:center;padding:15px}.modal .card{width:min(650px,100%);max-height:90vh;overflow:auto}
+.nav{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}.nav button{background:#fff;color:#1769aa;border:1px solid #1769aa}.nav button.active{background:#1769aa;color:#fff}
+.section{display:none}.section.active{display:block}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.products{grid-template-columns:repeat(2,1fr)}.stats{grid-template-columns:1fr 1fr}.cart-item{grid-template-columns:1fr 60px 80px 28px}}
+</style>
+</head>
+<body>
+<header><h1>🛒 Kasir Toko ATK</h1><span id="clock"></span></header>
+<div class="wrap">
+<div class="nav">
+<button class="active" onclick="showTab('kasir',this)">Kasir</button>
+<button onclick="showTab('produk',this)">Produk</button>
+<button onclick="showTab('laporan',this)">Laporan</button>
+</div>
+
+<section id="kasir" class="section active">
+<div class="stats">
+<div class="stat">Omzet Hari Ini<b id="todaySales">Rp0</b></div>
+<div class="stat">Transaksi Hari Ini<b id="todayCount">0</b></div>
+<div class="stat">Jumlah Produk<b id="productCount">0</b></div>
+</div>
+<div class="grid">
+<div class="card"><h2>Pilih Barang</h2>
+<input class="search" id="search" placeholder="🔎 Cari nama atau kode barang..." oninput="renderProducts()">
+<div class="products" id="products"></div></div>
+<div class="card"><h2>Keranjang</h2><div id="cart"></div>
+<div class="total">Total: <span id="total">Rp0</span></div>
+<label>Uang Dibayar</label><input id="paid" type="number" placeholder="0" oninput="updateChange()">
+p><b>Kembalian: <span id="change">Rp0</span></b></p>
+<div class="row"><button onclick="checkout()">Bayar & Cetak Struk</button><button class="danger" onclick="clearCart()">Kosongkan</button></div>
+</div></div></section>
+
+<section id="produk" class="section"><div class="card"><div class="row"><h2 style="flex:2">Data Produk</h2><button onclick="openProduct()">+ Tambah Produk</button></div>
+<table><thead><tr><th>Kode</th><th>Nama</th><th>Kategori</th><th>Harga</th><th>Stok</th><th>Aksi</th></tr></thead><tbody id="productTable"></tbody></table></div></section>
+
+<section id="laporan" class="section"><div class="card"><h2>Riwayat Penjualan</h2><table><thead><tr><th>Waktu</th><th>Item</th><th>Total</th></tr></thead><tbody id="salesTable"></tbody></table></div></section>
+</div>
+
+<div class="modal" id="modal"><div class="card"><h2 id="modalTitle">Tambah Produk</h2>
+<input type="hidden" id="pid"><label>Kode Barang</label><input id="pcode"><br><br>
+<label>Nama Barang</label><input id="pname"><br><br>
+<label>Kategori</label><input id="pcat" placeholder="Contoh: Pulpen"><br><br>
+<label>Harga Jual</label><input id="pprice" type="number"><br><br>
+<label>Stok</label><input id="pstock" type="number"><br><br>
+<div class="row"><button onclick="saveProduct()">Simpan</button><button class="secondary" onclick="closeProduct()">Batal</button></div>
+</div></div>
+
+<script>
+const rupiah=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(n||0);
+let products=JSON.parse(localStorage.atkProducts||'null')||[
+{id:1,code:'ATK001',name:'Pulpen Hitam',cat:'Pulpen',price:3000,stock:50},
+{id:2,code:'ATK002',name:'Buku Tulis 38 Lembar',cat:'Buku',price:5000,stock:40},
+{id:3,code:'ATK003',name:'Pensil 2B',cat:'Pensil',price:2500,stock:60},
+{id:4,code:'ATK004',name:'Penghapus',cat:'Penghapus',price:2000,stock:35},
+{id:5,code:'ATK005',name:'Penggaris 30cm',cat:'Penggaris',price:4000,stock:25},
+{id:6,code:'ATK006',name:'Spidol Hitam',cat:'Spidol',price:7000,stock:20},
+{id:7,code:'ATK007',name:'Kertas A4 80gsm',cat:'Kertas',price:55000,stock:15},
+{id:8,code:'ATK008',name:'Map Plastik',cat:'Map',price:2500,stock:45}
+];
+let sales=JSON.parse(localStorage.atkSales||'[]'),cart=[];
+function save(){localStorage.atkProducts=JSON.stringify(products);localStorage.atkSales=JSON.stringify(sales)}
+function renderProducts(){
+let q=document.getElementById('search').value.toLowerCase();
+document.getElementById('products').innerHTML=products.filter(p=>(p.name+p.code+p.cat).toLowerCase().includes(q)).map(p=>
+`<div class="product" onclick="addCart(${p.id})"><b>${p.name}</b><span class="muted">${p.code} · stok ${p.stock}</span><div class="price">${rupiah(p.price)}</div></div>`).join('');
+}
+function addCart(id){let p=products.find(x=>x.id===id);if(!p||p.stock<1)return alert('Stok habis.');let x=cart.find(x=>x.id===id);if(x){if(x.qty<p.stock)x.qty++;else alert('Jumlah melebihi stok.')}else cart.push({id,qty:1});renderCart()}
+function renderCart(){
+document.getElementById('cart').innerHTML=cart.length?cart.map(x=>{let p=products.find(y=>y.id===x.id);return `<div class="cart-item"><span>${p.name}<br><small>${rupiah(p.price)}</small></span><input type="number" min="1" max="${p.stock}" value="${x.qty}" onchange="setQty(${x.id},this.value)"><span>${rupiah(p.price*x.qty)}</span><button class="danger" onclick="removeCart(${x.id})">×</button></div>`}).join(''):'<p class="muted">Keranjang masih kosong.</p>';
+document.getElementById('total').textContent=rupiah(total());updateChange();
+}
+function setQty(id,v){let x=cart.find(x=>x.id===id),p=products.find(p=>p.id===id);x.qty=Math.max(1,Math.min(+v,p.stock));renderCart()}
+function removeCart(id){cart=cart.filter(x=>x.id!==id);renderCart()}
+function clearCart(){cart=[];renderCart();document.getElementById('paid').value=''}
+function total(){return cart.reduce((s,x)=>s+products.find(p=>p.id===x.id).price*x.qty,0)}
+function updateChange(){let c=(+document.getElementById('paid').value||0)-total();document.getElementById('change').textContent=rupiah(Math.max(0,c))}
+function checkout(){
+if(!cart.length)return alert('Keranjang kosong.');
+let paid=+document.getElementById('paid').value||0,t=total();if(paid<t)return alert('Uang pembayaran kurang.');
+let items=cart.map(x=>{let p=products.find(p=>p.id===x.id);p.stock-=x.qty;return {name:p.name,qty:x.qty,subtotal:p.price*x.qty}});
+sales.unshift({time:new Date().toLocaleString('id-ID'),items,total:t});save();printReceipt({items,total:t,paid,change:paid-t});cart=[];document.getElementById('paid').value='';renderAll();
+}
+function printReceipt(s){
+let w=open('','_blank','width=420,height=650');w.document.write(`<html><body style="font-family:monospace;padding:15px"><h3 style="text-align:center">TOKO ATK</h3><div style="text-align:center">Struk Penjualan</div><hr>${s.items.map(i=>`${i.name}<br>${i.qty} x ${rupiah(i.subtotal/i.qty)} = ${rupiah(i.subtotal)}<br>`).join('')}<hr><b>Total: ${rupiah(s.total)}<br>Bayar: ${rupiah(s.paid)}<br>Kembali: ${rupiah(s.change)}</b><p style="text-align:center">Terima kasih</p><script>window.print()<\/script></body></html>`);w.document.close();
+}
+function openProduct(id=null){let p=id&&products.find(x=>x.id===id);document.getElementById('modalTitle').textContent=p?'Edit Produk':'Tambah Produk';document.getElementById('pid').value=p?.id||'';document.getElementById('pcode').value=p?.code||'';document.getElementById('pname').value=p?.name||'';document.getElementById('pcat').value=p?.cat||'';document.getElementById('pprice').value=p?.price||'';document.getElementById('pstock').value=p?.stock||'';document.getElementById('modal').style.display='flex'}
+function closeProduct(){document.getElementById('modal').style.display='none'}
+function saveProduct(){let id=document.getElementById('pid').value,p={id:id?+id:Date.now(),code:pcode.value.trim(),name:pname.value.trim(),cat:pcat.value.trim(),price:+pprice.value,stock:+pstock.value};if(!p.code||!p.name||!p.price)return alert('Lengkapi data produk.');if(id)products[products.findIndex(x=>x.id==id)]=p;else products.push(p);save();closeProduct();renderAll()}
+function renderTable(){productTable.innerHTML=products.map(p=>`<tr><td>${p.code}</td><td>${p.name}</td><td>${p.cat}</td><td>${rupiah(p.price)}</td><td>${p.stock}</td><td><button onclick="openProduct(${p.id})">Edit</button> <button class="danger" onclick="deleteProduct(${p.id})">Hapus</button></td></tr>`).join('');}
+function deleteProduct(id){if(confirm('Hapus produk ini?')){products=products.filter(p=>p.id!==id);save();renderAll()}}
+function renderSales(){salesTable.innerHTML=sales.map(s=>`<tr><td>${s.time}</td><td>${s.items.map(i=>i.name+' × '+i.qty).join(', ')}</td><td>${rupiah(s.total)}</td></tr>`).join('')||'<tr><td colspan="3">Belum ada transaksi.</td></tr>'}
+function renderStats(){let d=new Date().toLocaleDateString('id-ID'),ss=sales.filter(s=>s.time.startsWith(d));todaySales.textContent=rupiah(ss.reduce((a,s)=>a+s.total,0));todayCount.textContent=ss.length;productCount.textContent=products.length}
+function renderAll(){renderProducts();renderCart();renderTable();renderSales();renderStats()}
+function showTab(id,btn){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active')}
+setInterval(()=>clock.textContent=new Date().toLocaleString('id-ID'),1000);renderAll();
+</script>
+</body></html>
